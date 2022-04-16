@@ -106,15 +106,17 @@ movement = 0
 while robot.step(TIME_STEP) != -1:
     current_pos = encoderL.getValue()
     #print(f"current: {current_pos}, initial: {initial_pos}")
-    #print(current_pos - initial_pos)
+    print(current_pos - initial_pos)
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
         stopped = 0
     elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.001):
         stopped = 0
+    elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.001):
+        stopped = 0
     if stopped == 0:
         mark_current(current_pos_map, 1)
         ir_values = measure_ir()
-        #print(ir_values)
+        print(ir_values)
         if(ir_values[0] > 200):
             mark_left(current_pos_map, 2)
         if(ir_values[1] > 200):
@@ -132,3 +134,8 @@ while robot.step(TIME_STEP) != -1:
             initial_pos = encoderL.getValue()
             #print(direction)
             current_pos_map = move_fwd(current_pos_map, direction)
+        elif(ir_values[1] < 200):
+            movement = 2
+            stopped = 1
+            initial_pos = encoderL.getValue()
+            firection = turn_right(direction)

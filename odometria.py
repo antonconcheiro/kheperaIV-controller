@@ -31,29 +31,69 @@ f_ir_sensor.enable(TIME_STEP)
 
 stopped = 0
 
-map = np.zeros((12,12))
+map = np.ones((12,12))
 map[INITIAL_POS]  = 1
 current_pos_map = INITIAL_POS
 direction = 0
 
-# 0-No obstacle, 1-Visited, 2-Obstacle
-def mark_left(pos, direction, mark):
-    if direction == 0:
-        map[pos[0],pos[1]+1] = mark
-    elif direction == 1:
-        map[pos[0]-1,pos[1]] = mark
+# 0-No obstacle, 1-No visited, 2-Visited, 3-Obstacle
+def mark_pos(pos, ir):
+    if ir > 200:
+        map[pos] = 3
+    elif map[pos] != 2:
+        map[pos] = 0
+
+def mark_current(pos):
+    map[pos] = 2
     
-def mark_right(pos, mark):
-    map[pos[0],pos[1]-1] = mark
-
-def mark_fwd(pos, direction, mark):
-    if direction==0:
-        map[pos[0]+1,pos[1]] = mark
-    elif direction==1:
-        map[pos[0],pos[1]+1] = mark
-
-def mark_current(pos, mark):
-    map[pos] = mark
+def mark_near(pos, direction, ir):
+    if direction == 0:
+        mark_pos((pos[0],pos[1]+1), ir[0]) # Left
+        mark_pos((pos[0],pos[1]-1), ir[1]) # Right
+        mark_pos((pos[0]+1,pos[1]), ir[2]) # Fwd
+    elif direction == 1:
+        mark_pos((pos[0]-1,pos[1]), ir[0]) # Left
+        mark_pos((pos[0]+1,pos[1]), ir[1]) # Right
+        mark_pos((pos[0],pos[1]+1), ir[2]) # Fwd
+    elif direction == 2:
+        mark_pos((pos[0],pos[1]-1), ir[0]) # Left
+        mark_pos((pos[0],pos[1]+1), ir[1]) # Right
+        mark_pos((pos[0]-1,pos[1]), ir[2]) # Fwd
+    elif direction == 3:
+        mark_pos((pos[0]+1,pos[1]), ir[0]) # Left
+        mark_pos((pos[0]-1,pos[1]), ir[1]) # Right
+        mark_pos((pos[0],pos[1]-1), ir[2]) # Fwd
+        
+def decide_dir(pos, dir):
+    if direction == 0:
+        array_directions = [
+            map[(pos[0],pos[1]+1)],
+            map[(pos[0]+1,pos[1])],
+            map[(pos[0],pos[1]-1)]
+        ] # Left, fwd, right
+    elif direction == 1:
+        array_directions = [
+            map[(pos[0]-1,pos[1])],
+            map[(pos[0],pos[1]+1)],
+            map[(pos[0]+1,pos[1])]
+        ] # Left, fwd, right
+    elif direction == 2:
+        array_directions = [
+            map[(pos[0],pos[1]-1)],
+            map[(pos[0]-1,pos[1])],
+            map[(pos[0],pos[1]+1)]
+        ] # Left, fwd, right
+    elif direction == 3:
+        array_directions = [
+            map[(pos[0]+1,pos[1])],
+            map[(pos[0],pos[1]-1)],
+            map[(pos[0]-1,pos[1])]
+        ] # Left, fwd, right
+    index = np.argmin(array_directions)
+    if array_directions[index] < 3:
+        return index
+    else:
+        return -1
 
 def stop_robot():
     leftWheel.setVelocity(0) 
@@ -123,27 +163,25 @@ while robot.step(TIME_STEP) != -1:
     elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.001):
         stopped = 0
     if stopped == 0:
-        print(map)
-        mark_current(current_pos_map, 1)
+        mark_current(current_pos_map)
         ir_values = measure_ir()
-        if(ir_values[0] > 200):
-            mark_left(current_pos_map, direction, 2)
-        if(ir_values[1] > 200):
-            mark_right(current_pos_map, 2)
-        if(ir_values[2] > 200):
-            mark_fwd(current_pos_map, direction, 2)
-        if(ir_values[0] < 200 and movement != 1):
+        mark_near(current_pos_map, direction, ir_values)
+        print(map)
+        print(current_pos_map)
+        next_dir = decide_dir(current_pos_map, direction) # 0-Left, 1-Fwd, 2-Right, -1-Back
+        print(next_dir)
+        if(next_dir == 0 and movement != 1):
             movement = 1
             stopped = 1
             initial_pos = encoderL.getValue()
             direction = turn_left(direction)        
-        elif(ir_values[2] < 200):
+        elif(next_dir == 1):
             movement = 0
             stopped = 1
             initial_pos = encoderL.getValue()
             #print(direction)
             current_pos_map = move_fwd(current_pos_map, direction)
-        elif(ir_values[1] < 200):
+        elif(next_dir == 2):
             movement = 2
             stopped = 1
             initial_pos = encoderL.getValue()

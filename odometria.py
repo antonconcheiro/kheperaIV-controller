@@ -8,7 +8,7 @@ WHEEL_RADIUS = 21
 FORWARD_ONE = SQUARE_SIZE / WHEEL_RADIUS
 TURN_VAL = 4.05
 
-INITIAL_POS = (0,3)
+INITIAL_POS = (1,4)
 
 robot = Robot()
 
@@ -31,7 +31,8 @@ f_ir_sensor.enable(TIME_STEP)
 
 stopped = 0
 
-map = np.ones((12,12))
+map = np.ones((13,13))
+map[0],map[-1],map[:,0],map[:,-1] = 3,3,3,3
 map[INITIAL_POS]  = 1
 current_pos_map = INITIAL_POS
 direction = 0
@@ -60,10 +61,6 @@ def mark_near(pos, direction, ir):
         mark_pos((pos[0],pos[1]+1), ir[1]) # Right
         mark_pos((pos[0]-1,pos[1]), ir[2]) # Fwd
     elif direction%4 == 3:
-        print(pos)
-        print((pos[0]+1,pos[1]))
-        print((pos[0]-1,pos[1]))
-        print((pos[0],pos[1]-1))
         mark_pos((pos[0]+1,pos[1]), ir[0]) # Left
         mark_pos((pos[0]-1,pos[1]), ir[1]) # Right
         mark_pos((pos[0],pos[1]-1), ir[2]) # Fwd
@@ -105,13 +102,13 @@ def stop_robot():
     rightWheel.setVelocity(0)
     
 def move_fwd(current_pos_map, direction):
-    if direction == 0:
+    if direction%4 == 0:
         current_pos_map = (current_pos_map[0] + 1, current_pos_map[1])
-    elif direction == 1:
+    elif direction%4 == 1:
         current_pos_map = (current_pos_map[0], current_pos_map[1] + 1)
-    elif direction == 2:
+    elif direction%4 == 2:
         current_pos_map = (current_pos_map[0] - 1, current_pos_map[1])
-    elif direction == 3:
+    elif direction%4 == 3:
         current_pos_map = (current_pos_map[0], current_pos_map[1] - 1)
     incrementL = FORWARD_ONE
     incrementR = FORWARD_ONE

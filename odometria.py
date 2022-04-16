@@ -37,14 +37,20 @@ current_pos_map = INITIAL_POS
 direction = 0
 
 # 0-No obstacle, 1-Visited, 2-Obstacle
-def mark_left(pos, mark):
-    map[pos[0],pos[1]+1] = mark
+def mark_left(pos, direction, mark):
+    if direction == 0:
+        map[pos[0],pos[1]+1] = mark
+    elif direction == 1:
+        map[pos[0]-1,pos[1]] = mark
     
 def mark_right(pos, mark):
     map[pos[0],pos[1]-1] = mark
 
-def mark_fwd(pos, mark):
-    map[pos[0]+1,pos[1]] = mark
+def mark_fwd(pos, direction, mark):
+    if direction==0:
+        map[pos[0]+1,pos[1]] = mark
+    elif direction==1:
+        map[pos[0],pos[1]+1] = mark
 
 def mark_current(pos, mark):
     map[pos] = mark
@@ -54,6 +60,9 @@ def stop_robot():
     rightWheel.setVelocity(0)
     
 def move_fwd(current_pos_map, direction):
+    #print(map)
+    #print(current_pos_map)
+    #print(direction)
     if direction == 0:
         current_pos_map = (current_pos_map[0] + 1, current_pos_map[1])
     elif direction == 1:
@@ -106,7 +115,7 @@ movement = 0
 while robot.step(TIME_STEP) != -1:
     current_pos = encoderL.getValue()
     #print(f"current: {current_pos}, initial: {initial_pos}")
-    print(current_pos - initial_pos)
+    #print(current_pos - initial_pos)
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
         stopped = 0
     elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.001):
@@ -114,15 +123,15 @@ while robot.step(TIME_STEP) != -1:
     elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.001):
         stopped = 0
     if stopped == 0:
+        print(map)
         mark_current(current_pos_map, 1)
         ir_values = measure_ir()
-        print(ir_values)
         if(ir_values[0] > 200):
-            mark_left(current_pos_map, 2)
+            mark_left(current_pos_map, direction, 2)
         if(ir_values[1] > 200):
             mark_right(current_pos_map, 2)
         if(ir_values[2] > 200):
-            mark_fwd(current_pos_map, 2)
+            mark_fwd(current_pos_map, direction, 2)
         if(ir_values[0] < 200 and movement != 1):
             movement = 1
             stopped = 1
@@ -138,4 +147,4 @@ while robot.step(TIME_STEP) != -1:
             movement = 2
             stopped = 1
             initial_pos = encoderL.getValue()
-            firection = turn_right(direction)
+            direction = turn_right(direction)

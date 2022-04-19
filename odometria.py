@@ -2,13 +2,13 @@ from controller import Robot, Motor, DistanceSensor
 import numpy as np
 
 TIME_STEP = 32
-MAX_SPEED = 15
+MAX_SPEED = 10
 SQUARE_SIZE = 250
 WHEEL_RADIUS = 21
 FORWARD_ONE = SQUARE_SIZE / WHEEL_RADIUS
 TURN_VAL = 4.05
 
-INITIAL_POS = (1,4)
+INITIAL_POS = (2,7)
 
 robot = Robot()
 
@@ -31,7 +31,7 @@ f_ir_sensor.enable(TIME_STEP)
 
 stopped = 0
 
-map = np.ones((13,13))
+map = np.ones((14,14))
 map[0],map[-1],map[:,0],map[:,-1] = 3,3,3,3
 map[INITIAL_POS]  = 1
 current_pos_map = INITIAL_POS
@@ -95,7 +95,7 @@ def decide_dir(pos, dir):
     if array_directions[index] < 3:
         return index
     else:
-        return -1
+        return 2
 
 def stop_robot():
     leftWheel.setVelocity(0) 
@@ -155,13 +155,14 @@ while robot.step(TIME_STEP) != -1:
     current_pos = encoderL.getValue()
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
         stopped = 0
-    elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.001):
+    elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.004):
         stopped = 0
-    elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.001):
+    elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
         stopped = 0
     if stopped == 0:
         mark_current(current_pos_map)
         ir_values = measure_ir()
+        print(ir_values)
         mark_near(current_pos_map, direction, ir_values)
         next_dir = decide_dir(current_pos_map, direction) # 0-Left, 1-Fwd, 2-Right, -1-Back
         if(next_dir == 0 and movement != 1):

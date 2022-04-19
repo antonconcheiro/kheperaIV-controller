@@ -29,6 +29,11 @@ l_ir_sensor.enable(TIME_STEP)
 r_ir_sensor.enable(TIME_STEP)
 f_ir_sensor.enable(TIME_STEP)
 
+f_camera = robot.getDevice("camera")
+f_camera.enable(TIME_STEP)
+
+found_goal = False
+
 stopped = 0
 
 map = np.ones((14,14))
@@ -141,7 +146,17 @@ def turn_right(direction):
     rightWheel.setPosition(encoderR.getValue()-TURN_VAL)
     return direction
 
-    
+def check_goal():
+    image = np.array(f_camera.getImageArray())
+    red = int(image[266:486,72:408,0].mean())
+    green = int(image[266:486,72:408,1].mean())
+    blue = int(image[266:486,72:408,2].mean())
+    print("R: "+str(red)+" G: "+str(green)+" B: "+str(blue))
+    if (red <= 110 and green >= 120 and blue <= 80):
+        return True
+    else:
+        return False
+        
 stop_robot()
 
 leftWheel.setVelocity(MAX_SPEED) 
@@ -151,7 +166,7 @@ initial_pos = encoderL.getValue()
 
 movement = 0
 
-while robot.step(TIME_STEP) != -1:
+while robot.step(TIME_STEP) != -1 and found_goal == False:
     current_pos = encoderL.getValue()
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
         stopped = 0
@@ -160,23 +175,25 @@ while robot.step(TIME_STEP) != -1:
     elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
         stopped = 0
     if stopped == 0:
+        found_goal = check_goal()
         mark_current(current_pos_map)
         ir_values = measure_ir()
         print(ir_values)
         mark_near(current_pos_map, direction, ir_values)
         next_dir = decide_dir(current_pos_map, direction) # 0-Left, 1-Fwd, 2-Right, -1-Back
-        if(next_dir == 0 and movement != 1):
-            movement = 1
-            stopped = 1
-            initial_pos = encoderL.getValue()
-            direction = turn_left(direction)        
-        elif(next_dir == 1):
-            movement = 0
-            stopped = 1
-            initial_pos = encoderL.getValue()
-            current_pos_map = move_fwd(current_pos_map, direction)
-        elif(next_dir == 2):
-            movement = 2
-            stopped = 1
-            initial_pos = encoderL.getValue()
-            direction = turn_right(direction)
+        if found_goal == False:
+            if(next_dir == 0 and movement != 1):
+                movement = 1
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_left(direction)        
+            elif(next_dir == 1):
+                movement = 0
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                current_pos_map = move_fwd(current_pos_map, direction)
+            elif(next_dir == 2):
+                movement = 2
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_right(direction)

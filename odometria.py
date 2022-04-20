@@ -2,13 +2,13 @@ from controller import Robot, Motor, DistanceSensor
 import numpy as np
 
 TIME_STEP = 32
-MAX_SPEED = 10
+MAX_SPEED = 5
 SQUARE_SIZE = 250
 WHEEL_RADIUS = 21
 FORWARD_ONE = SQUARE_SIZE / WHEEL_RADIUS
 TURN_VAL = 4.05
 
-INITIAL_POS = (2,7)
+INITIAL_POS = (1,4)
 
 robot = Robot()
 
@@ -64,9 +64,10 @@ def mark_near(pos, direction, ir):
         mark_pos((pos[0]+1,pos[1]), ir[0]) # Left
         mark_pos((pos[0]-1,pos[1]), ir[1]) # Right
         mark_pos((pos[0],pos[1]-1), ir[2]) # Fwd
-    print(map)
+    #print(map)
         
 def decide_dir(pos, dir):
+    #print(pos, dir%4)
     if dir%4 == 0:
         array_directions = [
             map[(pos[0],pos[1]+1)],
@@ -92,7 +93,9 @@ def decide_dir(pos, dir):
             map[(pos[0]-1,pos[1])]
         ] # Left, fwd, right
     index = np.argmin(array_directions)
-    if array_directions[index] < 3:
+    if array_directions[0]==array_directions[1] and array_directions[0]==2:
+        return 1
+    elif array_directions[index] < 3:
         return index
     else:
         return 2
@@ -164,7 +167,7 @@ while robot.step(TIME_STEP) != -1:
         ir_values = measure_ir()
         print(ir_values)
         mark_near(current_pos_map, direction, ir_values)
-        next_dir = decide_dir(current_pos_map, direction) # 0-Left, 1-Fwd, 2-Right, -1-Back
+        next_dir = decide_dir(current_pos_map, direction) # 0-Left, 1-Fwd, 2-Right
         if(next_dir == 0 and movement != 1):
             movement = 1
             stopped = 1

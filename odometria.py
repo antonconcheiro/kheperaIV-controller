@@ -9,8 +9,6 @@ WHEEL_RADIUS = 21
 FORWARD_ONE = SQUARE_SIZE / WHEEL_RADIUS
 TURN_VAL = 4.05
 
-INITIAL_POS = (1,4)
-
 robot = Robot()
 
 leftWheel = robot.getDevice("left wheel motor")
@@ -37,24 +35,21 @@ found_goal = False
 
 stopped = 0
 
-map = np.ones((14,14))
-map[0],map[-1],map[:,0],map[:,-1] = 3,3,3,3
-map[INITIAL_POS]  = 1
+map = np.zeros((27,27))
+map[0],map[-1],map[:,0],map[:,-1] = 1,1,1,1
+
+INITIAL_POS = (13,13)
 current_pos_map = INITIAL_POS
 direction = 0
 
-# 0-No obstacle, 1-No visited, 2-Visited, 3-Obstacle
-def mark_pos(pos, ir):
-    if map[pos]!=3:
-        if ir > 190:
-            map[pos] = 3
-        elif map[pos] != 2:
-            map[pos] = 0
 
-def mark_current(pos):
-    map[pos] = 2
+# 0-Generico, 1-Pared
+def mark_pos(pos, ir):
+    if ir > 190:
+        map[pos] = 1
     
 def mark_near(pos, direction, ir):
+    print(pos, direction, ir)
     if direction%4 == 0:
         mark_pos((pos[0],pos[1]+1), ir[0]) # Left
         mark_pos((pos[0],pos[1]-1), ir[1]) # Right
@@ -73,8 +68,7 @@ def mark_near(pos, direction, ir):
         mark_pos((pos[0],pos[1]-1), ir[2]) # Fwd
     #print(map)
         
-def decide_dir(pos, dir):
-    #print(pos, dir%4)
+def decide_dir(pos, dir, movement):
     if dir%4 == 0:
         array_directions = [
             map[(pos[0],pos[1]+1)],
@@ -99,14 +93,11 @@ def decide_dir(pos, dir):
             map[(pos[0],pos[1]-1)],
             map[(pos[0]-1,pos[1])]
         ] # Left, fwd, right
-    #print(array_directions)
     index = np.argmin(array_directions)
-    if array_directions[0]==array_directions[1] and array_directions[1]==array_directions[2] and array_directions[0]==2:
-        return -1
-    elif array_directions[index] < 3:
-        return index
-    else:
-        return 2
+    print(array_directions)
+    if movement == 1 and index==0:
+        return index + 1
+    return index
         
 def get_nearest_empty(pos):
     aux=np.asarray(np.where(map==0))
@@ -197,6 +188,9 @@ def check_goal():
         return True
     else:
         return False
+        
+def check_completed(pos, moved, initial_direction, dir):
+    return pos==INITIAL_POS and moved==1 and initial_direction==dir%4
 
     
 stop_robot()
@@ -208,42 +202,50 @@ initial_pos = encoderL.getValue()
 
 movement = 0
 mapping = 1
+has_moved = 0
+initial_direction = 0
 
 while robot.step(TIME_STEP) != -1:
     current_pos = encoderL.getValue()
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
         stopped = 0
+        has_moved = 1
     elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.004):
         stopped = 0
     elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
         stopped = 0
     if stopped == 0:
         found_goal = check_goal()
-        mark_current(current_pos_map)
-        ir_values = measure_ir()
-        #print(ir_values)
-        mark_near(current_pos_map, direction, ir_values)
-        next_dir = decide_dir(current_pos_map, direction) # 0-Left, 1-Fwd, 2-Right
-        if next_dir == -1:
-            nearest = get_nearest_empty(current_pos_map)
-            path=bfs(current_pos_map,nearest)
-            create_path(path)
-            if decide_dir(current_pos_map, direction) == -1:
-                next_dir = 2
-        print(map)
-        #if mapping==1 or found_goal == False:
-        if(next_dir == 0 and movement != 1):
-            movement = 1
-            stopped = 1
-            initial_pos = encoderL.getValue()
-            direction = turn_left(direction)        
-        elif(next_dir == 1):
-            movement = 0
-            stopped = 1
-            initial_pos = encoderL.getValue()
-            current_pos_map = move_fwd(current_pos_map, direction)
-        elif(next_dir == 2):
-            movement = 2
-            stopped = 1
-            initial_pos = encoderL.getValue()
-            direction = turn_right(direction)
+        if not check_completed(current_pos_map, has_moved,initial_direction, direction):
+            ir_values = measure_ir()
+            print(ir_values)
+            mark_near(current_pos_map, direction, ir_values)
+            next_dir = decide_dir(current_pos_map, direction, movement) # 0-Left, 1-Fwd, 2-Right
+            if next_dir == -1:
+                nearest = get_nearest_empty(current_pos_map)
+                path=bfs(current_pos_map,nearest)
+                create_path(path)
+                print(path)
+                if decide_dir(current_pos_map, direction, movement) == -1:
+                    next_dir = 2
+            #print(map)
+            #if mapping==1 or found_goal == False:
+            if(next_dir == 0):
+                movement = 1
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_left(direction)
+                if not has_moved:
+                    initial_direction = direction        
+            elif(next_dir == 1):
+                movement = 0
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                current_pos_map = move_fwd(current_pos_map, direction)
+            elif(next_dir == 2):
+                movement = 2
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_right(direction)
+                if not has_moved:
+                    initial_direction = direction

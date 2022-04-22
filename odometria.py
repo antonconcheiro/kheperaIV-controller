@@ -35,18 +35,20 @@ found_goal = False
 
 stopped = 0
 
-map = np.zeros((27,27))
-map[0],map[-1],map[:,0],map[:,-1] = 1,1,1,1
+map = np.ones((27,27))
+map[0],map[-1],map[:,0],map[:,-1] = 3,3,3,3
 
 INITIAL_POS = (13,13)
 current_pos_map = INITIAL_POS
 direction = 0
 
 
-# 0-Generico, 1-Pared
+# 0-Vacio, 1-No explorado, 2-Visitado, 3-Pared
 def mark_pos(pos, ir):
     if ir > 190:
-        map[pos] = 1
+        map[pos] = 3
+    elif map[pos]==1:
+        map[pos] = 0
     
 def mark_near(pos, direction, ir):
     if direction%4 == 0:
@@ -65,7 +67,6 @@ def mark_near(pos, direction, ir):
         mark_pos((pos[0]+1,pos[1]), ir[0]) # Left
         mark_pos((pos[0]-1,pos[1]), ir[1]) # Right
         mark_pos((pos[0],pos[1]-1), ir[2]) # Fwd
-    #print(map)
         
 def decide_dir(pos, dir, movement, map):
     if dir%4 == 0:
@@ -92,9 +93,11 @@ def decide_dir(pos, dir, movement, map):
             map[(pos[0],pos[1]-1)],
             map[(pos[0]-1,pos[1])]
         ] # Left, fwd, right
+    #if array_directions[0]==array_directions[2] and array_directions[0]<array_directions[1]:
+    #    return 2
     index = np.argmin(array_directions)
-    print(array_directions)
-    if all(element == array_directions[0] for element in array_directions) and array_directions[0]==1:
+    #print(array_directions)
+    if all(element == array_directions[0] for element in array_directions) and array_directions[0]==3:
         return 2
     elif movement == 1 and index==0:
         return index + 1
@@ -118,18 +121,16 @@ def bfs(start,goal,map):
     while queue:
         path = queue.popleft()
         x, y = path[-1]
-        #print((x,y),goal)
         if (y,x) == goal:
             return path
         for x2, y2 in ((x+1,y), (x-1,y), (x,y+1), (x,y-1)):
-            if 0 <= x2 < 14 and 0 <= y2 < 14 and map[y2][x2] != 1 and (x2, y2) not in seen:
+            if 0 <= x2 < 27 and 0 <= y2 < 27 and map[x2][y2] != 3 and (x2, y2) not in seen:
                 queue.append(path + [(x2, y2)])
                 seen.add((x2, y2))
                 
 def create_path(path, map):
     for cell in path:
-        new_cell=(cell[1],cell[0])
-        map[new_cell]=0
+        map[cell]=0
 
 def stop_robot():
     leftWheel.setVelocity(0) 
@@ -236,15 +237,12 @@ while robot.step(TIME_STEP) != -1 and finished_mapping == False:
         finished_mapping = check_completed(current_pos_map, has_moved)
         ir_values = measure_ir()
         mark_near(current_pos_map, direction, ir_values)
+        if has_moved:
+            map[current_pos_map]=2
+        else:
+            map[current_pos_map]=0
         if not finished_mapping:
             next_dir = decide_dir(current_pos_map, direction, movement, map) # 0-Left, 1-Fwd, 2-Right
-            if next_dir == -1:
-                nearest = get_nearest_empty(current_pos_map, map)
-                path=bfs(current_pos_map,nearest, map)
-                create_path(path, map)
-                print(path)
-                if decide_dir(current_pos_map, direction, movement, map) == -1:
-                    next_dir = 2
             if(next_dir == 0 and has_moved == 1):
                 movement = 1
                 stopped = 1
@@ -267,7 +265,8 @@ while robot.step(TIME_STEP) != -1 and finished_mapping == False:
                     
 print("Finished mapping")
 print("Started searching")
-
+map=np.where((map==0)|(map==2),1,map)
+print(map)
 # Comportamiento 2: buscar el objeto
 while robot.step(TIME_STEP) != -1 and finished_searching == False:
     current_pos = encoderL.getValue()
@@ -283,13 +282,6 @@ while robot.step(TIME_STEP) != -1 and finished_searching == False:
         if not finished_searching:
             print(current_pos_map)
             next_dir = decide_dir(current_pos_map, direction, movement, map) # 0-Left, 1-Fwd, 2-Right
-            if next_dir == -1:
-                nearest = get_nearest_empty(current_pos_map)
-                path=bfs(current_pos_map,nearest, map)
-                create_path(path, map)
-                print(path)
-                if decide_dir(current_pos_map, direction, movement, map) == -1:
-                    next_dir = 2
             if(next_dir == 0 and has_moved == 1):
                 movement = 1
                 stopped = 1
@@ -317,7 +309,6 @@ print("Started returning")
 
 #We need to mark the object as a wall, in order to be able to find a suitable path to return.
 #Otherwise, the robot may find a path through the object and get stuck as a result.
-print(map)
 #mark_object_as_wall(current_pos_map,direction)
 
 #Calculating the returning path
@@ -325,12 +316,11 @@ print(current_pos_map)
 print(INITIAL_POS)
 print(map)
 path_to_return = bfs(current_pos_map,INITIAL_POS, map)
-print("PATH TO RETURN: " + path_to_return)
+#print("PATH TO RETURN: " + path_to_return)
 
-returning_map = np.ones((27,27))
+create_path(path_to_return, map)
 
-create_path(path_to_return, returning_map)
-
+print(map)
 while robot.step(TIME_STEP) != -1 and finished_returning == False:
     current_pos = encoderL.getValue()
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
@@ -341,16 +331,13 @@ while robot.step(TIME_STEP) != -1 and finished_returning == False:
     elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
         stopped = 0
     if stopped == 0:
-        finished_returning = current_pos_map != INITIAL_POS
+        finished_returning = current_pos_map == INITIAL_POS
         if not finished_returning:
-            next_dir = decide_dir(current_pos_map, direction, movement, returning_map) # 0-Left, 1-Fwd, 2-Right
+            next_dir = decide_dir(current_pos_map, direction, movement, map) # 0-Left, 1-Fwd, 2-Right
             if next_dir == -1:
-                nearest = get_nearest_empty(current_pos_map, returning_map)
-                path=bfs(current_pos_map,nearest, returning_map)
-                create_path(path, returning_map)
-                print(path)
-                if decide_dir(current_pos_map, direction, movement, returning_map) == -1:
-                    next_dir = 2
+                nearest = get_nearest_empty(current_pos_map, map)
+                path=bfs(current_pos_map,nearest, map)
+                create_path(path, map)
             if(next_dir == 0 and has_moved == 1):
                 movement = 1
                 stopped = 1

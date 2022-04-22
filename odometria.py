@@ -67,7 +67,7 @@ def mark_near(pos, direction, ir):
         mark_pos((pos[0],pos[1]-1), ir[2]) # Fwd
     #print(map)
         
-def decide_dir(pos, dir, movement):
+def decide_dir(pos, dir, movement, map):
     if dir%4 == 0:
         array_directions = [
             map[(pos[0],pos[1]+1)],
@@ -100,7 +100,7 @@ def decide_dir(pos, dir, movement):
         return index + 1
     return index
         
-def get_nearest_empty(pos):
+def get_nearest_empty(pos,map):
     aux=np.asarray(np.where(map==0))
     near = None
     min_dist = None
@@ -112,7 +112,7 @@ def get_nearest_empty(pos):
             near = (zero_loc[0],zero_loc[1])
     return near
     
-def bfs(start,goal):
+def bfs(start,goal,map):
     queue = deque([[start]])
     seen = set([start])
     while queue:
@@ -122,11 +122,11 @@ def bfs(start,goal):
         if (y,x) == goal:
             return path
         for x2, y2 in ((x+1,y), (x-1,y), (x,y+1), (x,y-1)):
-            if 0 <= x2 < 14 and 0 <= y2 < 14 and map[y2][x2] != 3 and (x2, y2) not in seen:
+            if 0 <= x2 < 14 and 0 <= y2 < 14 and map[y2][x2] != 1 and (x2, y2) not in seen:
                 queue.append(path + [(x2, y2)])
                 seen.add((x2, y2))
                 
-def create_path(path):
+def create_path(path, map):
     for cell in path:
         new_cell=(cell[1],cell[0])
         map[new_cell]=0
@@ -193,6 +193,16 @@ def check_goal():
 def check_completed(pos, moved):
     return pos==INITIAL_POS and moved==1
 
+def mark_object_as_wall(pos, dir):
+    if dir%4 == 0:
+        map[(pos[0]+1,pos[1])]
+    elif dir%4 == 1:
+        map[(pos[0],pos[1]+1)]
+    elif dir%4 == 2:
+        map[(pos[0]-1,pos[1])]
+    elif dir%4 == 3:
+        map[(pos[0],pos[1]-1)]
+
     
 stop_robot()
 
@@ -206,7 +216,14 @@ mapping = 1
 has_moved = 0
 initial_direction = 0
 
-while robot.step(TIME_STEP) != -1:
+finished_mapping = False
+finished_searching = False
+finished_returning = False
+
+print("Started mapping")
+
+# Comportamiento 1: mapeado
+while robot.step(TIME_STEP) != -1 and finished_mapping == False:
     current_pos = encoderL.getValue()
     if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
         stopped = 0
@@ -216,20 +233,124 @@ while robot.step(TIME_STEP) != -1:
     elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
         stopped = 0
     if stopped == 0:
-        found_goal = check_goal()
-        if not check_completed(current_pos_map, has_moved):
-            ir_values = measure_ir()
-            mark_near(current_pos_map, direction, ir_values)
-            next_dir = decide_dir(current_pos_map, direction, movement) # 0-Left, 1-Fwd, 2-Right
+        finished_mapping = check_completed(current_pos_map, has_moved)
+        ir_values = measure_ir()
+        mark_near(current_pos_map, direction, ir_values)
+        if not finished_mapping:
+            next_dir = decide_dir(current_pos_map, direction, movement, map) # 0-Left, 1-Fwd, 2-Right
+            if next_dir == -1:
+                nearest = get_nearest_empty(current_pos_map, map)
+                path=bfs(current_pos_map,nearest, map)
+                create_path(path, map)
+                print(path)
+                if decide_dir(current_pos_map, direction, movement, map) == -1:
+                    next_dir = 2
+            if(next_dir == 0 and has_moved == 1):
+                movement = 1
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_left(direction)
+                if not has_moved:
+                    initial_direction = direction        
+            elif(next_dir == 1):
+                movement = 0
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                current_pos_map = move_fwd(current_pos_map, direction)
+            elif(next_dir == 2 or (next_dir == 0 and has_moved == 0)):
+                movement = 2
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_right(direction)
+                if not has_moved:
+                    initial_direction = direction
+                    
+print("Finished mapping")
+print("Started searching")
+
+# Comportamiento 2: buscar el objeto
+while robot.step(TIME_STEP) != -1 and finished_searching == False:
+    current_pos = encoderL.getValue()
+    if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
+        stopped = 0
+        has_moved = 1
+    elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.004):
+        stopped = 0
+    elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
+        stopped = 0
+    if stopped == 0:
+        finished_searching = check_goal()
+        if not finished_searching:
+            print(current_pos_map)
+            next_dir = decide_dir(current_pos_map, direction, movement, map) # 0-Left, 1-Fwd, 2-Right
             if next_dir == -1:
                 nearest = get_nearest_empty(current_pos_map)
-                path=bfs(current_pos_map,nearest)
-                create_path(path)
+                path=bfs(current_pos_map,nearest, map)
+                create_path(path, map)
                 print(path)
-                if decide_dir(current_pos_map, direction, movement) == -1:
+                if decide_dir(current_pos_map, direction, movement, map) == -1:
                     next_dir = 2
-            #print(map)
-            #if mapping==1 or found_goal == False:
+            if(next_dir == 0 and has_moved == 1):
+                movement = 1
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_left(direction)
+                if not has_moved:
+                    initial_direction = direction        
+            elif(next_dir == 1):
+                movement = 0
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                current_pos_map = move_fwd(current_pos_map, direction)
+            elif(next_dir == 2 or (next_dir == 0 and has_moved == 0)):
+                movement = 2
+                stopped = 1
+                initial_pos = encoderL.getValue()
+                direction = turn_right(direction)
+                if not has_moved:
+                    initial_direction = direction
+
+print("Finished searching")
+print("Started returning")
+
+#Comportamiento 3: volver
+
+#We need to mark the object as a wall, in order to be able to find a suitable path to return.
+#Otherwise, the robot may find a path through the object and get stuck as a result.
+print(map)
+#mark_object_as_wall(current_pos_map,direction)
+
+#Calculating the returning path
+print(current_pos_map)
+print(INITIAL_POS)
+print(map)
+path_to_return = bfs(current_pos_map,INITIAL_POS, map)
+print("PATH TO RETURN: " + path_to_return)
+
+returning_map = np.ones((27,27))
+
+create_path(path_to_return, returning_map)
+
+while robot.step(TIME_STEP) != -1 and finished_returning == False:
+    current_pos = encoderL.getValue()
+    if (movement == 0 and current_pos - initial_pos >= FORWARD_ONE):
+        stopped = 0
+        has_moved = 1
+    elif (movement == 1 and initial_pos - current_pos >= TURN_VAL -0.004):
+        stopped = 0
+    elif (movement == 2 and current_pos - initial_pos >= TURN_VAL -0.004):
+        stopped = 0
+    if stopped == 0:
+        finished_returning = current_pos_map != INITIAL_POS
+        if not finished_returning:
+            next_dir = decide_dir(current_pos_map, direction, movement, returning_map) # 0-Left, 1-Fwd, 2-Right
+            if next_dir == -1:
+                nearest = get_nearest_empty(current_pos_map, returning_map)
+                path=bfs(current_pos_map,nearest, returning_map)
+                create_path(path, returning_map)
+                print(path)
+                if decide_dir(current_pos_map, direction, movement, returning_map) == -1:
+                    next_dir = 2
             if(next_dir == 0 and has_moved == 1):
                 movement = 1
                 stopped = 1

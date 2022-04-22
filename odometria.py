@@ -49,7 +49,6 @@ def mark_pos(pos, ir):
         map[pos] = 1
     
 def mark_near(pos, direction, ir):
-    print(pos, direction, ir)
     if direction%4 == 0:
         mark_pos((pos[0],pos[1]+1), ir[0]) # Left
         mark_pos((pos[0],pos[1]-1), ir[1]) # Right
@@ -95,7 +94,9 @@ def decide_dir(pos, dir, movement):
         ] # Left, fwd, right
     index = np.argmin(array_directions)
     print(array_directions)
-    if movement == 1 and index==0:
+    if all(element == array_directions[0] for element in array_directions) and array_directions[0]==1:
+        return 2
+    elif movement == 1 and index==0:
         return index + 1
     return index
         
@@ -189,8 +190,8 @@ def check_goal():
     else:
         return False
         
-def check_completed(pos, moved, initial_direction, dir):
-    return pos==INITIAL_POS and moved==1 and initial_direction==dir%4
+def check_completed(pos, moved):
+    return pos==INITIAL_POS and moved==1
 
     
 stop_robot()
@@ -216,9 +217,8 @@ while robot.step(TIME_STEP) != -1:
         stopped = 0
     if stopped == 0:
         found_goal = check_goal()
-        if not check_completed(current_pos_map, has_moved,initial_direction, direction):
+        if not check_completed(current_pos_map, has_moved):
             ir_values = measure_ir()
-            print(ir_values)
             mark_near(current_pos_map, direction, ir_values)
             next_dir = decide_dir(current_pos_map, direction, movement) # 0-Left, 1-Fwd, 2-Right
             if next_dir == -1:
@@ -230,7 +230,7 @@ while robot.step(TIME_STEP) != -1:
                     next_dir = 2
             #print(map)
             #if mapping==1 or found_goal == False:
-            if(next_dir == 0):
+            if(next_dir == 0 and has_moved == 1):
                 movement = 1
                 stopped = 1
                 initial_pos = encoderL.getValue()
@@ -242,7 +242,7 @@ while robot.step(TIME_STEP) != -1:
                 stopped = 1
                 initial_pos = encoderL.getValue()
                 current_pos_map = move_fwd(current_pos_map, direction)
-            elif(next_dir == 2):
+            elif(next_dir == 2 or (next_dir == 0 and has_moved == 0)):
                 movement = 2
                 stopped = 1
                 initial_pos = encoderL.getValue()

@@ -6,7 +6,7 @@ from controller import Robot, Motor, DistanceSensor
 
 TIME_STEP = 32
 INFINITY = 999999
-MAX_SPEED = 27.6
+MAX_SPEED = 10
 
 ultrasonic_sensors_names = ["left ultrasonic sensor", "front left ultrasonic sensor", "front ultrasonic sensor", "front right ultrasonic sensor", "right ultrasonic sensor"]
 infrared_sensors_names = [
@@ -51,7 +51,11 @@ last_display_second = 0
 learning_rate = 0.5
 gamma_value = 0.5
 
+
 mat_q = np.zeros((3,3))
+visitas = np.zeros((3,3))
+
+sensors_hist = []
 
 class Estado(Enum):
     S1 = 0
@@ -78,7 +82,7 @@ def check_estado(sensor_values):
         return Estado.S2
     return Estado.S3
     
-def check_refuerzo(prev_sensor_values, new_sensor_values):
+def check_refuerzo(new_sensor_values, prev_sensor_values):
     if all(value < 500 for value in prev_sensor_values) and all(value < 500 for value in new_sensor_values):
         return 1
     elif all(value < 500 for value in prev_sensor_values) and not all(value < 500 for value in new_sensor_values):
@@ -87,12 +91,19 @@ def check_refuerzo(prev_sensor_values, new_sensor_values):
         return -1
     elif all(value > 750 for value in prev_sensor_values) and not all(value > 750 for value in new_sensor_values):
         return 1
+    elif sum(i > 750 for i in prev_sensor_values) < sum(i > 750 for i in new_sensor_values):
+        return -1
+    else:
+        return 1
 
-def actualizar_refuerzo(refuerzo, action, prev_estado, nuevo_estado):
-    print(refuerzo)
-    #print(refuerzo + gamma_value * np.argmax(mat_q[nuevo_estado.value]))
-    mat_q[prev_estado.value][action] = (1-learning_rate) * mat_q[estado_actual.value][accion_actual.value] + learning_rate * (refuerzo + gamma_value * np.argmax(mat_q[nuevo_estado.value]))
+def actualizar_refuerzo(refuerzo, action, prev_estado, nuevo_estado, learning_rate):
+    visitas[prev_estado.value][action] += 1
+    learning_rate = 1 / (1 + visitas[prev_estado.value][action])
+    mat_q[prev_estado.value][action] = (1-learning_rate) * mat_q[prev_estado.value][action] + learning_rate * (refuerzo + gamma_value * np.argmax(mat_q[nuevo_estado.value]))
+    return learning_rate
 
+def pick_random_action():
+    return random.randint(0, 2)
     
 def pick_action(estado_actual):
     return np.argmax(mat_q[estado_actual.value])
@@ -120,36 +131,29 @@ def perform_action(action):
         turn_left()
     elif action == 2:
         go_straight()
-
-def print_estado():
-    print(mat_q[estado_actual.value][accion_actual.value])
     
 
 while robot.step(TIME_STEP) != -1:
     display_second = robot.getTime()
     if display_second != last_display_second:
         last_display_second = display_second
-
-        #print(ir_sensors[3].getValue())
-        #print(f'time = {display_second} [s]')
-        #for i in range(len(u_sensors)):
-        #    print(f'- ultrasonic sensor({ultrasonic_sensors_names[i]}) = {u_sensors[i].getValue()}')
-        #for i in range(len(ir_sensors)):
-        #    print(f' infrared sensor({infrared_sensors_names[i]}) = {ir_sensors[i].getValue()}')
-
-        for led in leds:
-            led.set(0xFFFFFF & random.randrange(20000))
-
-        speed_offset = 0.2 * (MAX_SPEED - 0.03 * ir_sensors[3].getValue());
-        speed_delta = 0.03 * ir_sensors[2].getValue() - 0.03 * ir_sensors[4].getValue()
-        #leftWheel.setVelocity(speed_offset + speed_delta)
-        #rightWheel.setVelocity(speed_offset - speed_delta)
-        sensor_values = check_sensors()
-        estado_actual = check_estado(sensor_values)
-        action = pick_action(estado_actual)
-        perform_action(action)
         
-        new_sensor_values = check_sensors()
-        nuevo_estado = check_estado(new_sensor_values)
-        refuerzo = check_refuerzo(sensor_values, new_sensor_values)
-        actualizar_refuerzo(refuerzo, action, estado_actual, nuevo_estado)
+        if (ir_sensors[2].getValue() > 300 or ir_sensors[3].getValue() > 300 or ir_sensors[4].getValue() > 300):
+            speed_offset = 0.2 * (MAX_SPEED - 0.03 * ir_sensors[3].getValue());
+            speed_delta = 0.03 * ir_sensors[2].getValue() - 0.03 * ir_sensors[4].getValue()
+            leftWheel.setVelocity(speed_offset + speed_delta)
+            rightWheel.setVelocity(speed_offset - speed_delta)
+        else:
+            sensor_values = check_sensors()
+            sensors_hist.append(sensor_values)
+            estado_actual = check_estado(sensor_values)
+            
+            action = pick_action(estado_actual)
+            print(mat_q)
+            perform_action(action)
+        
+            sensors_hist.append(check_sensors())
+            new_sensor_values = sensors_hist[len(sensors_hist)-3]
+            nuevo_estado = check_estado(new_sensor_values)
+            refuerzo = check_refuerzo(sensor_values, new_sensor_values)
+            learning_rate = actualizar_refuerzo(refuerzo, action, estado_actual, nuevo_estado, learning_rate)

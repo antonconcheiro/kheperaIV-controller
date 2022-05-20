@@ -48,35 +48,81 @@ rightWheel.setVelocity(0)
 last_display_second = 0
 
 
-
+learning_rate = 0.5
+gamma_value = 0.5
 
 mat_q = np.zeros((3,3))
 
 class Estado(Enum):
-    S1 = 1
-    S2 = 2
-    S3 = 3
+    S1 = 0
+    S2 = 1
+    S3 = 2
+    
+class Accion(Enum):
+    A1 = 0
+    A2 = 1
+    A3 = 2
     
 estado_actual = Estado.S3
+accion_actual = Accion.A1
+
     
-def check_estado():
-    if ir_sensors[9].getValue() > 750 and ir_sensors[11].getValue() < 500:
+def check_sensors():
+    return [ir_sensors[8].getValue(), ir_sensors[9].getValue(),
+            ir_sensors[10].getValue(), ir_sensors[11].getValue()]
+    
+def check_estado(sensor_values):
+    if sensor_values[1] > 750 and sensor_values[3] < 500:
         return Estado.S1
-    elif ir_sensors[10].getValue() > 750 and ir_sensors[8].getValue() < 500:
+    elif sensor_values[2] > 750 and sensor_values[0] < 500:
         return Estado.S2
     return Estado.S3
+    
+def check_refuerzo(prev_sensor_values, new_sensor_values):
+    if all(value < 500 for value in prev_sensor_values) and all(value < 500 for value in new_sensor_values):
+        return 1
+    elif all(value < 500 for value in prev_sensor_values) and not all(value < 500 for value in new_sensor_values):
+        return -1
+    elif all(value > 750 for value in prev_sensor_values) and all(value > 750 for value in new_sensor_values):
+        return -1
+    elif all(value > 750 for value in prev_sensor_values) and not all(value > 750 for value in new_sensor_values):
+        return 1
+
+def actualizar_refuerzo(refuerzo, action, prev_estado, nuevo_estado):
+    print(refuerzo)
+    #print(refuerzo + gamma_value * np.argmax(mat_q[nuevo_estado.value]))
+    mat_q[prev_estado.value][action] = (1-learning_rate) * mat_q[estado_actual.value][accion_actual.value] + learning_rate * (refuerzo + gamma_value * np.argmax(mat_q[nuevo_estado.value]))
+
+    
+def pick_action(estado_actual):
+    return np.argmax(mat_q[estado_actual.value])
+    
 
 def go_straight():
+    accion_actual = Accion.A1
     leftWheel.setVelocity(MAX_SPEED)
     rightWheel.setVelocity(MAX_SPEED)
     
 def turn_left():
+    accion_actual = Accion.A2
     leftWheel.setVelocity(-MAX_SPEED)
     rightWheel.setVelocity(MAX_SPEED)
     
 def turn_right():
+    accion_actual = Accion.A3
     leftWheel.setVelocity(MAX_SPEED)
     rightWheel.setVelocity(-MAX_SPEED)
+
+def perform_action(action):
+    if action == 0:
+        turn_right()
+    elif action == 1:
+        turn_left()
+    elif action == 2:
+        go_straight()
+
+def print_estado():
+    print(mat_q[estado_actual.value][accion_actual.value])
     
 
 while robot.step(TIME_STEP) != -1:
@@ -98,9 +144,12 @@ while robot.step(TIME_STEP) != -1:
         speed_delta = 0.03 * ir_sensors[2].getValue() - 0.03 * ir_sensors[4].getValue()
         #leftWheel.setVelocity(speed_offset + speed_delta)
         #rightWheel.setVelocity(speed_offset - speed_delta)
-        go_straight()
-        estado_actual = check_estado()
-        print(estado_actual)
-		
-
-#wb_robot_cleanup()
+        sensor_values = check_sensors()
+        estado_actual = check_estado(sensor_values)
+        action = pick_action(estado_actual)
+        perform_action(action)
+        
+        new_sensor_values = check_sensors()
+        nuevo_estado = check_estado(new_sensor_values)
+        refuerzo = check_refuerzo(sensor_values, new_sensor_values)
+        actualizar_refuerzo(refuerzo, action, estado_actual, nuevo_estado)
